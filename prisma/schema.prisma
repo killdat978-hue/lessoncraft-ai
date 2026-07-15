@@ -1,0 +1,383 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  emailVerified         DateTime?
+  name                  String?
+  image                 String?
+  password              String?
+  role                  UserRole  @default(TEACHER)
+  status                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  accounts              Account[]
+  sessions              Session[]
+  lessons               Lesson[]
+  chats                 Chat[]
+  materials             Material[]
+  classes               Class[]
+  subscriptions         Subscription[]
+  payments              Payment[]
+  prompts               Prompt[]
+  community             CommunityPost[]
+  comments              Comment[]
+  ratings               Rating[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  TEACHER
+  STUDENT
+  SCHOOL
+  ADMIN
+}
+
+// Account Model (OAuth)
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// Session Model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Lesson Model
+model Lesson {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?   @db.Text
+  subject         String
+  gradeLevel      String
+  objectives      String[]  @default([])
+  materials       String[]  @default([])
+  activities      String[]  @default([])
+  rubric          String?   @db.Text
+  assessments     String?   @db.Text
+  differentiation String?   @db.Text
+  documentUrl     String?
+  slideUrl        String?
+  status          LessonStatus @default(DRAFT)
+  isPublic        Boolean   @default(false)
+  views           Int       @default(0)
+  userId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community CommunityPost[]
+  ratings Rating[]
+
+  @@index([userId])
+  @@map("lessons")
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Chat Model
+model Chat {
+  id          String   @id @default(cuid())
+  title       String
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isPinned    Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@map("chats")
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  chatId      String
+  role        String   // 'user' or 'assistant'
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@map("chat_messages")
+}
+
+// Material Model
+model Material {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  type        MaterialType
+  subject     String
+  gradeLevel  String
+  fileUrl     String
+  thumbnailUrl String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("materials")
+}
+
+enum MaterialType {
+  PDF
+  DOCX
+  PPTX
+  VIDEO
+  IMAGE
+  OTHER
+}
+
+// Class Model
+model Class {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  subject     String
+  gradeLevel  String
+  userId      String   // Teacher
+  code        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students ClassStudent[]
+  assignments Assignment[]
+
+  @@index([userId])
+  @@map("classes")
+}
+
+// Class Student Model
+model ClassStudent {
+  id          String   @id @default(cuid())
+  classId     String
+  studentId   String
+  joinedAt    DateTime @default(now())
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@map("class_students")
+}
+
+// Assignment Model
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  classId     String
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([classId])
+  @@map("assignments")
+}
+
+// Submission Model
+model Submission {
+  id          String   @id @default(cuid())
+  assignmentId String
+  studentId   String
+  content     String   @db.Text
+  score       Float?
+  feedback    String?  @db.Text
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("submissions")
+}
+
+// Subscription Model
+model Subscription {
+  id          String   @id @default(cuid())
+  userId      String
+  plan        SubscriptionPlan
+  status      SubscriptionStatus @default(ACTIVE)
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+enum SubscriptionPlan {
+  FREE
+  DAILY
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PENDING
+}
+
+// Payment Model
+model Payment {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  currency    String   @default("VND")
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  transactionId String?
+  metadata    String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  VNPAY
+  MOMO
+  ZALOPAY
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Prompt Model
+model Prompt {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  category    String
+  subject     String?
+  gradeLevel  String?
+  createdBy   String
+  isPublic    Boolean  @default(false)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([createdBy])
+  @@map("prompts")
+}
+
+// Community Post Model
+model CommunityPost {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  lessonId    String
+  userId      String
+  likesCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments Comment[]
+
+  @@index([userId])
+  @@index([lessonId])
+  @@map("community_posts")
+}
+
+// Comment Model
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+  @@map("comments")
+}
+
+// Rating Model
+model Rating {
+  id        String   @id @default(cuid())
+  lessonId  String
+  userId    String
+  score     Int
+  review    String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([lessonId])
+  @@map("ratings")
+}
